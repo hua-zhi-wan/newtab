@@ -617,14 +617,27 @@
             document.getElementById('weekday').textContent = weekday;
         }
 
-        // 获取网站favicon URL（使用Google Favicon服务，不受CORS限制）
+        // 获取网站favicon URL（优先使用国内稳定服务）
         function getFaviconUrl(siteUrl) {
             try {
                 const url = new URL(siteUrl);
                 const domain = url.hostname;
-                return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+                // 主服务：toolb.cn（国内访问稳定）
+                return `https://toolb.cn/favicon/${domain}`;
             } catch (error) {
                 console.error('URL解析失败:', error);
+                return null;
+            }
+        }
+
+        // 获取备选favicon URL（主服务失败时回退使用）
+        function getFaviconBackupUrl(siteUrl) {
+            try {
+                const url = new URL(siteUrl);
+                const domain = url.hostname;
+                // 备选：Google 国内 CDN
+                return `https://t0.gstatic.cn/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://${domain}&size=64`;
+            } catch (error) {
                 return null;
             }
         }
@@ -650,7 +663,7 @@
                             <div class="nav-icon">
                                 <img src="${faviconUrl}" 
                                      alt="${bookmark.name}" 
-                                     onerror="this.src='${getDefaultIcon()}'"
+                                     data-url="${bookmark.url}"
                                      loading="lazy">
                             </div>
                         </div>
@@ -660,6 +673,25 @@
                 `;
                 
                 navGrid.appendChild(navItem);
+            });
+            
+            // 绑定 favicon 回退事件（安全方式，避免 XSS）
+            navGrid.querySelectorAll('img[data-url]').forEach(img => {
+                img.addEventListener('error', function() {
+                    const siteUrl = this.dataset.url;
+                    if (!this.dataset.fallbackUsed) {
+                        // 第一次失败，尝试备选服务
+                        const backupUrl = getFaviconBackupUrl(siteUrl);
+                        if (backupUrl) {
+                            this.dataset.fallbackUsed = 'backup';
+                            this.src = backupUrl;
+                            return;
+                        }
+                    }
+                    // 备选也失败，使用默认图标
+                    this.onerror = null;
+                    this.src = getDefaultIcon();
+                });
             });
             
             // 添加删除事件监听
